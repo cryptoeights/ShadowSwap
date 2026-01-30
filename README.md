@@ -9,11 +9,26 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue.svg)](https://soliditylang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
-[![Arbitrum Sepolia](https://img.shields.io/badge/Network-Arbitrum%20Sepolia-blue.svg)](https://arbitrum.io/)
+[![Deployed](https://img.shields.io/badge/Deployed-Arbitrum%20Sepolia-blue.svg)](https://sepolia.arbiscan.io/address/0x11a5f59AF554FCbB9D82C1Ba7f963912b2D5Bb8f)
 
 [Demo Video](#demo-video) • [Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
 </div>
+
+---
+
+## ⭐ Hackathon Highlights
+
+> **Built for iExec Confidential DeFi Hackathon**
+
+| Criteria | Implementation |
+|----------|---------------|
+| ✅ **Deployed on Arbitrum Sepolia** | [View on Arbiscan](https://sepolia.arbiscan.io/address/0x11a5f59AF554FCbB9D82C1Ba7f963912b2D5Bb8f) |
+| ✅ **iExec DataProtector Integration** | Order encryption for MEV protection ([details](#iexec-dataprotector-integration)) |
+| ✅ **Real-World DeFi Problem** | Solves front-running & sandwich attacks |
+| ✅ **Code Quality** | TypeScript, Foundry, OpenZeppelin, comprehensive docs |
+| ✅ **User Experience** | Modern UI, real-time updates, intuitive flow |
+| 📝 **Feedback Document** | [FEEDBACK.md](FEEDBACK.md) |
 
 ---
 
@@ -62,12 +77,45 @@ ShadowSwap addresses these issues by:
 ShadowSwap leverages **iExec DataProtector** for order confidentiality:
 
 ```
-User Order → Encrypt with DataProtector → Submit to ShadowPool → Batch Settlement
+┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────┐
+│ User Order  │────▶│ iExec DataProt  │────▶│   ShadowPool    │────▶│   Batch     │
+│  (Plain)    │     │   (Encrypt)     │     │   (On-chain)    │     │ Settlement  │
+└─────────────┘     └─────────────────┘     └─────────────────┘     └─────────────┘
+      │                     │                       │                     │
+      ▼                     ▼                       ▼                     ▼
+  - tokenIn            Encrypted blob          Store encrypted      Decrypt & match
+  - tokenOut           + dataset addr          Wait for batch       at uniform price
+  - amountIn
+  - limitPrice
 ```
 
-- Orders are encrypted before submission, hiding trade details
-- Only the batch settlement process can decrypt orders
-- Prevents any party from front-running or manipulating orders
+**Why iExec DataProtector?**
+
+| Without Encryption | With iExec DataProtector |
+|-------------------|-------------------------|
+| ❌ Order visible in mempool | ✅ Order details hidden |
+| ❌ Validators can front-run | ✅ No front-running possible |
+| ❌ Sandwich attacks possible | ✅ Attack impossible without data |
+| ❌ Poor execution price | ✅ Fair batch settlement |
+
+**Technical Implementation:**
+
+```typescript
+// frontend/src/lib/encryption.ts
+import { IExecDataProtector } from '@iexec/dataprotector';
+
+const protectedData = await dataProtector.protectData({
+    data: {
+        tokenIn: order.tokenIn,
+        tokenOut: order.tokenOut,
+        amountIn: order.amountIn.toString(),
+        limitPrice: order.limitPrice.toString(),
+    },
+    name: `ShadowSwap-Order-${Date.now()}`,
+});
+```
+
+📖 **[Full iExec Integration Details](docs/IEXEC_INTEGRATION.md)** | 📝 **[iExec Tools Feedback](FEEDBACK.md)**
 
 ---
 
