@@ -196,14 +196,14 @@ forge script script/Deploy.s.sol:DeployScript \
 
 ### Arbitrum Sepolia (Current)
 
-| Contract | Address |
-|----------|---------|
-| ShadowPool | `0x11a5f59AF554FCbB9D82C1Ba7f963912b2D5Bb8f` |
-| MockPriceFeed | `0x5b64624706060e5ABc6c0d14d8050AE3b14667CC` |
-| mUSDC | `0x7128C549eEE4053e8de64baB7ED6CdbAe7ec8ce3` |
-| mDAI | `0x3F3f4C72e1756AE6d8D6D02eDaC9E0B9ED17e01E` |
-| mWETH | `0xC1e0C8A51b5324bef1d6E20c07E3A85a95D8CC52` |
-| mETH | `0x6D87e7DaeB2ECbE8EC0CedC3C9Bd6284DAa80a31` |
+| Contract | Address | Arbiscan |
+|----------|---------|----------|
+| ShadowPool | `0xfFCdCE40dfD214F2e13F67d9337B0E0e22024F09` | [View](https://sepolia.arbiscan.io/address/0xfFCdCE40dfD214F2e13F67d9337B0E0e22024F09) |
+| MockPriceFeed | `0xb87889a99AcCF70a2aeA7F63Fdcde302fCd2e006` | [View](https://sepolia.arbiscan.io/address/0xb87889a99AcCF70a2aeA7F63Fdcde302fCd2e006) |
+| mUSDC | `0xcC5f8FC3CcAB02157F82afb7E19Fc65f4808849e` | [View](https://sepolia.arbiscan.io/address/0xcC5f8FC3CcAB02157F82afb7E19Fc65f4808849e) |
+| mDAI | `0xda222533d71C37A9370C6b5a26BcB4C07EcB0454` | [View](https://sepolia.arbiscan.io/address/0xda222533d71C37A9370C6b5a26BcB4C07EcB0454) |
+| mWETH | `0xe160dc7BD1E9d63A47a1d4CD082c332DD19D870c` | [View](https://sepolia.arbiscan.io/address/0xe160dc7BD1E9d63A47a1d4CD082c332DD19D870c) |
+| mETH | `0x62b64cC9B1Aa2F2c9d612f0b4a58Cfba0eEc9bE2` | [View](https://sepolia.arbiscan.io/address/0x62b64cC9B1Aa2F2c9d612f0b4a58Cfba0eEc9bE2) |
 
 ---
 

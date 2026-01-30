@@ -4,7 +4,7 @@ This document provides a complete reference for ShadowSwap smart contract functi
 
 ## ShadowPool Contract
 
-**Address (Arbitrum Sepolia):** `0x11a5f59AF554FCbB9D82C1Ba7f963912b2D5Bb8f`
+**Address (Arbitrum Sepolia):** `0xfFCdCE40dfD214F2e13F67d9337B0E0e22024F09` ([View on Arbiscan](https://sepolia.arbiscan.io/address/0xfFCdCE40dfD214F2e13F67d9337B0E0e22024F09))
 
 ---
 
@@ -230,7 +230,7 @@ function userOrders(address user, uint256 index) external view returns (bytes32)
 
 ## MockPriceFeed Contract
 
-**Address:** `0x5b64624706060e5ABc6c0d14d8050AE3b14667CC`
+**Address:** `0xb87889a99AcCF70a2aeA7F63Fdcde302fCd2e006` ([View on Arbiscan](https://sepolia.arbiscan.io/address/0xb87889a99AcCF70a2aeA7F63Fdcde302fCd2e006))
 
 ### setPrice
 
