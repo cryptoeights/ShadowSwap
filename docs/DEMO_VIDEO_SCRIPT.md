@@ -1,242 +1,208 @@
 # ShadowSwap Demo Video Script
 
-**Duration:** 4 minutes  
+**Duration:** 4 minutes (max)  
 **Language:** English  
-**Purpose:** Hackathon submission demo showcasing iExec DataProtector integration
+**Purpose:** Hackathon submission - iExec Hack4Privacy  
+**Chain:** Arbitrum Sepolia Testnet
 
 ---
 
 ## VIDEO SCRIPT
 
-### [0:00 - 0:30] INTRODUCTION - The Problem
+### [0:00 - 0:25] THE PROBLEM (25 seconds)
 
-**[VISUAL: Show news headlines about MEV attacks, sandwich attacks statistics]**
+**[SCREEN: Show DeFi news headlines about MEV / sandwich attacks, or simple text slides]**
 
-> "Every day, DeFi users lose millions of dollars to MEV attacks. When you submit a swap on a traditional DEX, your transaction sits in the mempool, completely visible to everyone.
+> "Every day, DeFi users lose millions of dollars to MEV attacks.
 >
-> Validators and bots see your pending trade, front-run it to buy tokens before you, then sell them back to you at a higher price. This is called a sandwich attack, and it happens thousands of times per day.
+> When you submit a swap on a traditional DEX, your transaction details sit in the mempool - completely visible. Sniper bots can front-run your trade, sandwich it, or copy your strategy.
 >
-> The question is: how do we trade on-chain without exposing our order details?"
+> What if your order was invisible until execution? That's what ShadowSwap does."
 
 ---
 
-### [0:30 - 1:00] THE SOLUTION - ShadowSwap
+### [0:25 - 0:50] THE SOLUTION (25 seconds)
 
-**[VISUAL: Show ShadowSwap logo and landing page]**
+**[SCREEN: ShadowSwap app homepage at localhost:3000]**
 
-> "Introducing ShadowSwap - a confidential batch auction DEX that leverages iExec DataProtector to encrypt your orders before they ever touch the blockchain.
+> "ShadowSwap is a confidential DEX built on Arbitrum Sepolia that uses iExec DataProtector to encrypt every order before it touches the blockchain.
 >
-> With ShadowSwap, your order details - the tokens, amounts, and prices - are encrypted using iExec's confidential computing technology. No one can see what you're trading until the batch is settled.
+> We deployed a real iExec iApp - a TEE application running inside Intel SGX enclaves - that processes orders privately.
 >
-> Let me show you how it works."
+> Let me show you the two main features: MEV-Protected Market Swaps and Encrypted Limit Orders."
 
 ---
 
-### [1:00 - 1:30] DEMO - Connecting & Getting Tokens
+### [1:00 - 2:00] DEMO 1: MEV-PROTECTED MARKET SWAP (60 seconds)
 
-**[VISUAL: Screen recording of the app]**
+**[SCREEN: SwapCard with Market tab selected]**
 
-> "First, I'll connect my wallet to Arbitrum Sepolia testnet."
+> "First, I'll connect my wallet."
 
-**[ACTION: Click Connect Wallet, select MetaMask, approve connection]**
+**[ACTION: Connect wallet via RainbowKit]**
 
-> "Now I need some test tokens. ShadowSwap includes a built-in faucet for testing."
+> "Now let's do a market swap. Notice this toggle: MEV Protection. When enabled, your swap is encrypted with iExec DataProtector before submission."
 
-**[ACTION: Go to Settings, click Mint for mUSDC and mWETH]**
+**[ACTION: Point to the MEV Protection toggle - show it's ON by default]**
 
-> "I'm minting some mock USDC and mock WETH. These mock tokens track real-world prices from CoinGecko, so we can test with realistic market conditions."
+> "The toggle shows four protections: hidden from bots, anti front-run, TEE encrypted, and anti copy-trade."
 
-**[ACTION: Wait for confirmations, show updated balances]**
+**[ACTION: Select mWETH → mUSDC, enter amount like 0.1]**
+
+> "When I click Private Swap, watch the process:"
+
+**[ACTION: Click "Private Swap (MEV Protected)" button]**
+
+> "Step one: the app calls iExec DataProtector's protectData function - encrypting my swap details and storing them on IPFS.
+>
+> Step two: grantAccess authorizes our deployed iApp to decrypt this data inside a TEE."
+
+**[SCREEN: Show the purple encryption progress panel with the two steps]**
+
+> "Now the encrypted order is submitted to the ShadowPool smart contract on Arbitrum Sepolia."
+
+**[ACTION: Confirm in MetaMask, wait for success]**
+
+> "Done! And here are two on-chain records I can verify:"
+
+**[ACTION: Point to success panel showing both links]**
+
+> "First, the Arbiscan link showing the transaction on Arbitrum Sepolia."
+
+**[ACTION: Click Arbiscan link - briefly show the transaction]**
+
+> "And second, the iExec Explorer link showing my Protected Data - this is the encrypted dataset created by DataProtector."
+
+**[ACTION: Click iExec Explorer link - show the dataset page at explorer.iex.ec/arbitrum-sepolia-testnet/dataset/0x...]**
+
+> "This proves the encryption happened on-chain. No bot could read my order details."
 
 ---
 
-### [1:30 - 2:15] DEMO - Instant Swap with Price Sync
+### [2:00 - 3:00] DEMO 2: ENCRYPTED LIMIT ORDER (60 seconds)
 
-**[VISUAL: SwapCard interface]**
+**[SCREEN: Switch to Limit tab in SwapCard]**
 
-> "Let's do an instant swap. I'll swap mWETH for mUSDC.
->
-> Notice what happens when I click swap - the system first fetches the current ETH price from CoinGecko, then syncs that price to our on-chain price oracle. This ensures you always get accurate, real-time pricing."
+> "Now let's create an encrypted limit order. I want to sell mWETH when ETH reaches a specific price."
 
-**[ACTION: Select mWETH → mUSDC, enter 0.5, click Swap]**
+**[ACTION: Switch to Limit tab. Select mWETH → mUSDC. Enter amount. Set a limit price slightly above current]**
 
-> "The transaction is now being processed..."
+> "Notice the header shows 'Private' badge and the info panel confirms iExec DataProtector TEE encryption is active, with a link to our deployed iApp."
 
-**[ACTION: Wait for confirmation, show success message]**
+**[ACTION: Point to the purple "Private" badge and iApp link]**
 
-> "Done! And here's my transaction on Arbiscan. I received the exact amount expected based on the current market rate."
+> "When I submit, the same encryption flow happens - protectData encrypts my limit price and target, grantAccess authorizes the iApp."
 
-**[ACTION: Click Arbiscan link to show transaction]**
+**[ACTION: Click Submit Limit Order, confirm in MetaMask]**
 
----
+> "My encrypted limit order is now on-chain. Let's check the Limit Orders Panel."
 
-### [2:15 - 3:00] DEMO - Limit Orders with iExec Encryption
+**[SCREEN: Show LimitOrdersPanel on the right side]**
 
-**[VISUAL: Limit order tab]**
+> "Here I can see my pending order: the current ETH price updating in real-time, my target price, and a progress bar. The Keeper Bot status shows whether our automated execution system is running."
 
-> "Now here's where iExec DataProtector really shines - limit orders.
->
-> I want to sell my mWETH, but only when ETH reaches a higher price. I'll set a target price and submit the order."
+**[ACTION: Point to Live Price Ticker and Keeper Bot status]**
 
-**[ACTION: Switch to Limit tab, set target price $50 above current]**
+> "When the price reaches my target, the keeper bot automatically executes the order. And in Transaction History below, every transaction has links to both Arbiscan and iExec Explorer."
 
-> "When I click submit, watch what happens. The order data - including my target price and amount - is encrypted using iExec DataProtector before being sent to the blockchain.
->
-> This means no one can see my trading strategy. No bot can front-run my limit order."
-
-**[ACTION: Click Submit Limit Order, wait for confirmation]**
-
-> "My encrypted order is now stored on-chain. Let's look at the Limit Orders Panel."
-
-**[VISUAL: Show LimitOrdersPanel with the pending order]**
-
-> "Here you can see my order status - the current ETH price, my target price, and a progress bar showing how close we are. The 'Keeper Bot Active' indicator shows that our automated system is monitoring prices."
+**[ACTION: Scroll to Transaction History, show the Arbiscan and iExec Explorer links, and TEE Encrypted badge]**
 
 ---
 
-### [3:00 - 3:30] iExec DataProtector - Technical Deep Dive
+### [3:00 - 3:40] TECHNICAL ARCHITECTURE (40 seconds)
 
-**[VISUAL: Architecture diagram or code snippets]**
+**[SCREEN: Show code or architecture diagram]**
 
-> "Let me explain the technical implementation.
+> "Here's what makes ShadowSwap unique technically:
 >
-> When you submit an order, ShadowSwap uses the iExec DataProtector SDK to encrypt your order data client-side. The encrypted blob and a dataset address are then stored in our ShadowPool smart contract.
->
-> Here's the key insight: the encrypted data cannot be decrypted by validators, MEV bots, or anyone watching the mempool. Only the authorized settlement process can access the original order details.
->
-> For limit orders, our keeper bot monitors real-time prices and automatically executes orders when conditions are met - all while keeping your strategy private until execution.
->
-> This is true MEV protection through confidential computing."
+> First, we deployed a real iExec iApp at address 0x834255 on Arbitrum Sepolia Testnet. This is a TEE application that runs inside Intel SGX enclaves."
 
-**[VISUAL: Show code snippet of encryption]**
+**[SCREEN: Show iExec Explorer app page or the iApp address]**
+
+> "Second, we use the iExec DataProtector SDK in the frontend. When a user submits any order, protectData encrypts the order details - token addresses, amounts, limit prices - and stores them as a Protected Dataset on-chain.
+>
+> Then grantAccess authorizes our iApp to decrypt the data. Only inside the TEE can the order be read. No validator, no MEV bot, no one can see your trade.
+>
+> Third, we built a custom gas-boosted provider that wraps the Ethereum provider to fix gas fee issues on Arbitrum Sepolia - a practical solution we documented in our FEEDBACK.md."
+
+**[SCREEN: Briefly show the code snippet of protectData call]**
 
 ```javascript
-// Order encryption with iExec DataProtector
-const protectedData = await dataProtector.protectData({
-    data: {
-        tokenIn, tokenOut, amountIn, limitPrice
-    },
+const protectedData = await dataProtector.core.protectData({
+    data: { tokenIn, tokenOut, amountIn, limitPrice },
     name: 'ShadowSwap-Order'
+});
+await dataProtector.core.grantAccess({
+    protectedData: protectedData.address,
+    authorizedApp: IEXEC_IAPP_ADDRESS
 });
 ```
 
 ---
 
-### [3:30 - 3:50] Additional Features
+### [3:40 - 4:00] CLOSING (20 seconds)
 
-**[VISUAL: Quick tour of Dashboard and Analytics]**
+**[SCREEN: Return to ShadowSwap main page, show GitHub URL]**
 
-> "ShadowSwap also includes a comprehensive dashboard showing your order history, all synced from blockchain events. And our analytics page displays global DEX statistics in real-time.
+> "ShadowSwap demonstrates how iExec DataProtector solves a real DeFi problem: protecting users from MEV attacks through confidential computing.
 >
-> Everything is open source, fully documented, and deployed on Arbitrum Sepolia."
-
-**[ACTION: Quick navigation through Dashboard → Analytics]**
-
----
-
-### [3:50 - 4:00] CONCLUSION
-
-**[VISUAL: Return to main page, show GitHub link]**
-
-> "ShadowSwap demonstrates how iExec DataProtector can solve real problems in DeFi - protecting users from MEV attacks while maintaining the transparency and trustlessness of blockchain.
->
-> Check out our GitHub repository for the full source code, documentation, and deployment guide.
+> Everything is open source, deployed on Arbitrum Sepolia, and fully documented. Check out our GitHub repository for the complete code and deployment guide.
 >
 > Thank you for watching!"
 
-**[VISUAL: Show links]**
+**[SCREEN: Show end card with:]**
 - GitHub: github.com/cryptoeights/ShadowSwap
-- Contract: sepolia.arbiscan.io/address/0xfFCdCE40dfD214F2e13F67d9337B0E0e22024F09
-
----
-
-## KEY POINTS TO EMPHASIZE
-
-### iExec Tools Used
-
-| Tool | How We Use It |
-|------|---------------|
-| **iExec DataProtector SDK** | Encrypts order data (amounts, prices, tokens) before on-chain submission |
-| **Protected Data** | Stores encrypted order details that only authorized apps can decrypt |
-| **Dataset Registry** | References encrypted data on-chain without exposing contents |
-
-### Why iExec for MEV Protection?
-
-1. **Client-side Encryption**: Orders encrypted before leaving your browser
-2. **On-chain Privacy**: Encrypted blob stored on blockchain, invisible to validators
-3. **Selective Decryption**: Only authorized settlement process can decrypt
-4. **Trustless**: No centralized party can see your orders
-
-### Features to Highlight
-
-1. **Instant Swaps** - Real-time price syncing with CoinGecko
-2. **Limit Orders** - Encrypted target prices, auto-execution
-3. **Keeper Bot** - Automated price monitoring and order execution
-4. **Transaction History** - Persistent history from blockchain events
-5. **Analytics Dashboard** - Real-time DEX statistics
+- iApp: 0x834255dF01eE89d5096371a7eeFaF4332d4e2bfF
+- ShadowPool: 0xfFCdCE40dfD214F2e13F67d9337B0E0e22024F09
 
 ---
 
 ## RECORDING CHECKLIST
 
 ### Before Recording
-- [ ] MetaMask connected to Arbitrum Sepolia
-- [ ] Wallet has testnet ETH (~0.01 ETH)
-- [ ] Clear browser cache
-- [ ] Frontend running at localhost:3000
-- [ ] Keeper bot running (optional, for live execution)
 
-### Test Actions Before Recording
-- [ ] Mint tokens works
-- [ ] Instant swap completes
-- [ ] Limit order submits
-- [ ] Dashboard loads history
-- [ ] Analytics shows data
+- [ ] MetaMask connected to **Arbitrum Sepolia** testnet
+- [ ] Wallet has testnet ETH (get from faucet if needed)
+- [ ] Frontend running: `cd frontend && npm run dev` → localhost:3000
+- [ ] Already have some mUSDC and mWETH tokens (mint from faucet in app)
+- [ ] Clear browser console
+- [ ] Browser zoom: 100%, resolution: 1920x1080
+- [ ] Disable browser notifications
+- [ ] Close unnecessary tabs
 
-### Recording Settings
-- Resolution: 1920x1080
-- Browser zoom: 100%
-- Disable notifications
-- Use quality microphone
+### Test Before Recording (DRY RUN)
 
-### Recommended Tools
-- **OBS Studio** - Free screen recording
-- **Loom** - Easy sharing
-- **DaVinci Resolve** - Free video editing
+1. [ ] Connect wallet works
+2. [ ] MEV Protection toggle works (ON/OFF)
+3. [ ] Market swap with MEV Protection ON → shows encryption progress → success with both links
+4. [ ] Click Arbiscan link → tx visible
+5. [ ] Click iExec Explorer link → dataset visible
+6. [ ] Limit order submits → appears in Limit Orders Panel
+7. [ ] Transaction History shows entries with Arbiscan + iExec links
+8. [ ] No console errors
 
----
+### Recording Tips
 
-## TRANSCRIPT TIMESTAMPS
-
-| Time | Section | Key Message |
-|------|---------|-------------|
-| 0:00 | Intro | MEV problem costs millions |
-| 0:30 | Solution | ShadowSwap + iExec encryption |
-| 1:00 | Demo 1 | Connect wallet, mint tokens |
-| 1:30 | Demo 2 | Instant swap with price sync |
-| 2:15 | Demo 3 | Limit order with encryption |
-| 3:00 | Technical | iExec DataProtector deep dive |
-| 3:30 | Features | Dashboard, Analytics |
-| 3:50 | Conclusion | GitHub, thank you |
+- Use **OBS Studio** (free) or **Loom** (easy sharing)
+- Record at 1080p
+- Speak slowly and clearly
+- Pause briefly at each step so viewers can follow
+- Keep mouse movements smooth
+- If MetaMask popup appears, wait for it and explain what's happening
 
 ---
 
-## ALTERNATIVE SHORTER SCRIPT (2 minutes)
+## TIMESTAMPS REFERENCE
 
-If you need a shorter version:
-
-> "Traditional DEXs expose your trades to MEV attacks - front-running and sandwich attacks cost users millions daily.
->
-> ShadowSwap solves this using iExec DataProtector. Your order data is encrypted before touching the blockchain - amounts, prices, tokens - all hidden from validators and bots.
->
-> [DEMO: Quick swap and limit order]
->
-> For limit orders, the encryption ensures no one can see your target price until execution. Our keeper bot monitors prices and auto-executes when conditions are met.
->
-> This is MEV protection through confidential computing. Check out our GitHub for the full source code.
->
-> Thank you!"
+| Time | Section | Duration | Key Message |
+|------|---------|----------|-------------|
+| 0:00 | Problem | 25s | MEV attacks cost DeFi users millions |
+| 0:25 | Solution | 25s | ShadowSwap + iExec DataProtector + TEE |
+| 1:00 | Demo: MEV Swap | 60s | Private swap with encryption, two on-chain proofs |
+| 2:00 | Demo: Limit Order | 60s | Encrypted limit, keeper bot, iExec Explorer |
+| 3:00 | Technical | 40s | iApp deployment, DataProtector SDK, architecture |
+| 3:40 | Closing | 20s | Open source, GitHub link, thank you |
 
 ---
 
-*Last updated: January 2026*
+*Last updated: February 2026*

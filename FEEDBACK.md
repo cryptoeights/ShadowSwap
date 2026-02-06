@@ -72,11 +72,25 @@ The [iExec documentation](https://tools.docs.iex.ec/) covers:
 
 **Suggestion:** Consider providing a "dev mode" that simulates iExec functionality locally without network calls, similar to how we implemented our fallback encryption.
 
-### 3. Gas Cost Considerations
+### 3. Gas Fee Handling on L2s (Arbitrum Sepolia)
 
-**Challenge:** On-chain operations involving encrypted data can be gas-intensive due to data size.
+**Challenge:** The DataProtector SDK internally calls `eth_sendTransaction` for `protectData()` without sufficient `maxFeePerGas` for Arbitrum Sepolia. This causes "max fee per gas less than block base fee" errors because the base fee fluctuates on L2s.
 
-**Suggestion:** Documentation on gas optimization strategies for encrypted data would be helpful. Perhaps recommend compression techniques or chunking strategies.
+**Our Solution:** We built a proxy provider (`createGasBoostedProvider`) that wraps `window.ethereum` and intercepts `eth_sendTransaction` calls to inject proper EIP-1559 gas parameters (`baseFee * 2` buffer) before they reach MetaMask.
+
+```javascript
+// Our gas-boosted provider wrapper (frontend/src/lib/encryption.ts)
+const boostedProvider = createGasBoostedProvider(window.ethereum);
+const dataProtector = new IExecDataProtector(boostedProvider);
+```
+
+**Suggestion:** The SDK should handle L2 gas estimation internally, or at least provide a configuration option for custom gas parameters. A `gasOptions` parameter in the constructor would help:
+
+```javascript
+const dataProtector = new IExecDataProtector(provider, {
+    gasOptions: { maxFeePerGasMultiplier: 2.0 } // Suggested API
+});
+```
 
 ### 4. Debugging Encrypted Data
 
@@ -224,8 +238,8 @@ Thanks to the iExec team for:
 ## 📞 Contact
 
 For questions about our iExec integration:
-- GitHub Issues: [shadowswap/issues](https://github.com/pebfriantiya/shadowswap/issues)
-- Email: [your-email@example.com]
+- GitHub Issues: [ShadowSwap/issues](https://github.com/cryptoeights/ShadowSwap/issues)
+- Repository: [github.com/cryptoeights/ShadowSwap](https://github.com/cryptoeights/ShadowSwap)
 
 ---
 
