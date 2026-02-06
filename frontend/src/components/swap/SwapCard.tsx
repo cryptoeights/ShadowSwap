@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowDownUp, Lock, Package, Handshake, Info, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { ArrowDownUp, Lock, Package, Handshake, Info, AlertCircle, CheckCircle2, ExternalLink, Shield, ShieldOff, Eye, EyeOff } from 'lucide-react';
 import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { Token } from '@/types';
@@ -44,6 +44,9 @@ export default function SwapCard() {
     const [limitPrice, setLimitPrice] = useState('');
     const [orderStep, setOrderStep] = useState<OrderStep>('idle');
     const [errorMessage, setErrorMessage] = useState<string>('');
+    
+    // MEV Protection toggle for market orders
+    const [mevProtection, setMevProtection] = useState<boolean>(true);
 
     // Batch status from contract or mock data
     const { batchId, orderCount, timeRemaining } = useBatchStatus();
@@ -77,6 +80,7 @@ export default function SwapCard() {
 
     const {
         submitOrder,
+        hash: submitHash,
         isPending: isSubmitting,
         isConfirming: isSubmitConfirming,
         isSuccess: isSubmitSuccess,
@@ -178,52 +182,110 @@ export default function SwapCard() {
             setErrorMessage('');
             const amountInBigInt = parseUnits(fromAmount, fromToken.decimals);
 
-            // For market orders, use instant swap with price sync
+            // For market orders
             if (orderType === 'market') {
-                setOrderStep('submitting');
                 
-                console.log('=== MARKET ORDER - SYNCING PRICES ===');
-                
-                // Step 1: Get current prices and calculate expected output
-                const { ethPrice, amountOut } = await syncPricesAndGetQuote(
-                    fromToken.address as `0x${string}`,
-                    toToken.address as `0x${string}`,
-                    amountInBigInt
-                );
-                
-                console.log('Current ETH price:', ethPrice);
-                console.log('Expected output:', amountOut.toString());
-                
-                // Step 2: Pre-flight check (balance and allowance)
-                const preflight = await preflightInstantSwap(
-                    publicClient,
-                    address,
-                    fromToken.address as `0x${string}`,
-                    toToken.address as `0x${string}`,
-                    amountInBigInt
-                );
+                // === PRIVATE MARKET ORDER (MEV Protected) ===
+                // Encrypt order with iExec DataProtector → submit to batch system
+                // Bots CANNOT see order details (token, amount, direction)
+                if (mevProtection) {
+                    setOrderStep('encrypting');
+                    console.log('=== PRIVATE MARKET ORDER (MEV Protected) ===');
+                    
+                    // Step 1: Encrypt market order with DataProtector
+                    const orderData = {
+                        type: 'market' as const,
+                        direction: 'sell' as const,
+                        tokenIn: fromToken.address,
+                        tokenOut: toToken.address,
+                        amountIn: fromAmount,
+                    };
 
-                console.log('Preflight result:', preflight);
+                    const encryptionResult = await encryptOrder(orderData, address);
+                    const { encryptedData, datasetAddress } = encryptionResult;
+                    setIExecResult(encryptionResult);
+                    
+                    console.log('Order encrypted. isReal:', encryptionResult.isRealEncryption);
+                    if (encryptionResult.protectedDataAddress) {
+                        console.log('iExec Protected Data:', encryptionResult.protectedDataAddress);
+                        console.log('iExec Explorer:', encryptionResult.iExecExplorerUrl);
+                    }
 
-                if (!preflight.ok) {
-                    console.error('Preflight failed:', preflight.error);
-                    setOrderStep('error');
-                    setErrorMessage(preflight.error || 'Pre-flight check failed');
-                    return;
+                    // Step 2: Pre-flight check
+                    const preflight = await preflightSubmitOrder(
+                        publicClient,
+                        address,
+                        fromToken.address as `0x${string}`,
+                        toToken.address as `0x${string}`,
+                        amountInBigInt,
+                        encryptedData,
+                        datasetAddress,
+                    );
+
+                    if (!preflight.ok) {
+                        console.error('Preflight failed:', preflight.error);
+                        setOrderStep('error');
+                        setErrorMessage(preflight.error || 'Pre-flight check failed');
+                        return;
+                    }
+
+                    // Step 3: Submit encrypted order to batch system
+                    setOrderStep('submitting');
+                    console.log('Submitting encrypted market order to batch...');
+                    submitOrder(
+                        encryptedData,
+                        datasetAddress,
+                        fromToken.address as `0x${string}`,
+                        toToken.address as `0x${string}`,
+                        amountInBigInt
+                    );
+                    
+                } else {
+                    // === STANDARD MARKET ORDER (Fast, no encryption) ===
+                    setOrderStep('submitting');
+                    console.log('=== STANDARD MARKET ORDER ===');
+                    
+                    // Step 1: Get current prices and calculate expected output
+                    const { ethPrice, amountOut } = await syncPricesAndGetQuote(
+                        fromToken.address as `0x${string}`,
+                        toToken.address as `0x${string}`,
+                        amountInBigInt
+                    );
+                    
+                    console.log('Current ETH price:', ethPrice);
+                    console.log('Expected output:', amountOut.toString());
+                    
+                    // Step 2: Pre-flight check (balance and allowance)
+                    const preflight = await preflightInstantSwap(
+                        publicClient,
+                        address,
+                        fromToken.address as `0x${string}`,
+                        toToken.address as `0x${string}`,
+                        amountInBigInt
+                    );
+
+                    console.log('Preflight result:', preflight);
+
+                    if (!preflight.ok) {
+                        console.error('Preflight failed:', preflight.error);
+                        setOrderStep('error');
+                        setErrorMessage(preflight.error || 'Pre-flight check failed');
+                        return;
+                    }
+
+                    // Step 3: Store swap data for after price sync
+                    const minAmountOut = (amountOut * BigInt(99)) / BigInt(100); // 1% slippage
+                    setPendingSwapData({
+                        tokenIn: fromToken.address as `0x${string}`,
+                        tokenOut: toToken.address as `0x${string}`,
+                        amountIn: amountInBigInt,
+                        minAmountOut,
+                    });
+                    
+                    // Step 4: Sync prices on-chain first
+                    console.log('Syncing prices on-chain...');
+                    await syncPrices();
                 }
-
-                // Step 3: Store swap data for after price sync
-                const minAmountOut = (amountOut * BigInt(99)) / BigInt(100); // 1% slippage
-                setPendingSwapData({
-                    tokenIn: fromToken.address as `0x${string}`,
-                    tokenOut: toToken.address as `0x${string}`,
-                    amountIn: amountInBigInt,
-                    minAmountOut,
-                });
-                
-                // Step 4: Sync prices on-chain first
-                console.log('Syncing prices on-chain...');
-                await syncPrices();
                 
             } else {
                 // For limit orders, use batch submission with encryption
@@ -324,7 +386,7 @@ export default function SwapCard() {
         }
     }, [isSyncSuccess, pendingSwapData, instantSwap]);
 
-    // Save transaction when swap is initiated
+    // Save transaction when swap is initiated (standard instant swap)
     useEffect(() => {
         if (swapHash && fromToken && toToken) {
             saveTransaction({
@@ -340,6 +402,27 @@ export default function SwapCard() {
             setLastTxHash(swapHash);
         }
     }, [swapHash, fromToken, toToken, fromAmount, toAmount]);
+    
+    // Save transaction for private market order (MEV protected, batch submission)
+    useEffect(() => {
+        if (submitHash && fromToken && toToken && orderType === 'market' && mevProtection) {
+            saveTransaction({
+                hash: submitHash,
+                type: 'swap',
+                tokenIn: fromToken.symbol,
+                tokenOut: toToken.symbol,
+                amountIn: fromAmount,
+                amountOut: toAmount,
+                timestamp: Date.now(),
+                status: 'pending',
+                // iExec DataProtector tracking
+                iExecProtectedDataAddress: iExecResult?.protectedDataAddress,
+                iExecExplorerUrl: iExecResult?.iExecExplorerUrl,
+                isRealEncryption: iExecResult?.isRealEncryption,
+            });
+            setLastTxHash(submitHash);
+        }
+    }, [submitHash, fromToken, toToken, fromAmount, toAmount, orderType, mevProtection, iExecResult]);
     
     // Save limit order transaction (with iExec DataProtector tracking)
     useEffect(() => {
@@ -460,9 +543,12 @@ export default function SwapCard() {
         if (isSwapConfirming) return 'Swapping...';
         if (isSubmitting || isSubmittingLimit) return 'Confirm in Wallet...';
         if (isSubmitConfirming || isLimitConfirming) return 'Confirming Order...';
-        if (orderStep === 'success') return orderType === 'market' ? 'Swap Complete!' : 'Order Submitted!';
+        if (orderStep === 'success') return orderType === 'market' ? (mevProtection ? 'Private Swap Submitted!' : 'Swap Complete!') : 'Order Submitted!';
         if (needsApproval()) return `Approve ${fromToken?.symbol}`;
-        return orderType === 'market' ? 'Swap (Live Rate)' : 'Submit Limit Order';
+        if (orderType === 'market') {
+            return mevProtection ? 'Private Swap (MEV Protected)' : 'Swap (Live Rate)';
+        }
+        return 'Submit Limit Order';
     };
 
     const formattedBalance = (() => {
@@ -479,9 +565,17 @@ export default function SwapCard() {
             <div className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-2xl p-5 gradient-border">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
-                        {orderType === 'market' ? 'Swap' : 'Limit Order'}
-                    </h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                            {orderType === 'market' ? 'Swap' : 'Limit Order'}
+                        </h2>
+                        {((orderType === 'market' && mevProtection) || orderType === 'limit') && (
+                            <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-purple-500/20 text-purple-400 flex items-center gap-1">
+                                <Shield className="w-3 h-3" />
+                                Private
+                            </span>
+                        )}
+                    </div>
                     <button className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
                         <Info className="w-5 h-5" />
                     </button>
@@ -542,6 +636,80 @@ export default function SwapCard() {
                     />
                 </div>
 
+                {/* MEV Protection Toggle - Market Orders */}
+                {orderType === 'market' && (
+                    <div className="mt-4">
+                        <button
+                            onClick={() => setMevProtection(!mevProtection)}
+                            className={`w-full p-3 rounded-xl border transition-all ${
+                                mevProtection
+                                    ? 'bg-purple-500/10 border-purple-500/40 hover:border-purple-500/60'
+                                    : 'bg-[var(--bg-tertiary)] border-[var(--border-primary)] hover:border-[var(--border-secondary)]'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    {mevProtection ? (
+                                        <Shield className="w-5 h-5 text-purple-400" />
+                                    ) : (
+                                        <ShieldOff className="w-5 h-5 text-[var(--text-muted)]" />
+                                    )}
+                                    <div className="text-left">
+                                        <p className={`text-sm font-medium ${mevProtection ? 'text-purple-400' : 'text-[var(--text-secondary)]'}`}>
+                                            MEV Protection
+                                        </p>
+                                        <p className="text-xs text-[var(--text-muted)]">
+                                            {mevProtection 
+                                                ? 'Order encrypted with iExec DataProtector (TEE)'
+                                                : 'Standard swap - visible in mempool'
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className={`w-10 h-5 rounded-full transition-all relative ${
+                                    mevProtection ? 'bg-purple-500' : 'bg-gray-600'
+                                }`}>
+                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${
+                                        mevProtection ? 'left-5' : 'left-0.5'
+                                    }`} />
+                                </div>
+                            </div>
+                            
+                            {/* MEV protection details */}
+                            {mevProtection && (
+                                <div className="mt-3 pt-3 border-t border-purple-500/20 grid grid-cols-2 gap-2">
+                                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                                        <EyeOff className="w-3 h-3 text-purple-400" />
+                                        <span>Hidden from bots</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                                        <Shield className="w-3 h-3 text-purple-400" />
+                                        <span>Anti front-run</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                                        <Lock className="w-3 h-3 text-purple-400" />
+                                        <span>TEE encrypted</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                                        <Eye className="w-3 h-3 text-purple-400" />
+                                        <span>Anti copy-trade</span>
+                                    </div>
+                                </div>
+                            )}
+                        </button>
+                        
+                        {/* Warning when MEV protection is off */}
+                        {!mevProtection && (
+                            <div className="mt-2 flex items-start gap-2 p-2 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
+                                <AlertCircle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                                <p className="text-xs text-yellow-400/80">
+                                    Without MEV protection, sniper bots can see your swap details in the mempool and front-run or sandwich your trade.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Limit Price Input */}
                 {orderType === 'limit' && (
                     <div className="mt-4 space-y-2">
@@ -567,36 +735,60 @@ export default function SwapCard() {
 
                 {/* Order Info */}
                 <div className="mt-5 p-4 rounded-xl bg-[var(--bg-tertiary)] space-y-2">
+                    {/* Encryption status */}
                     <div className="flex items-center gap-2 text-sm">
-                        <Lock className="w-4 h-4 text-purple-400" />
-                        <span className="text-[var(--text-secondary)]">
-                            {orderType === 'limit' 
-                                ? 'iExec DataProtector encryption (TEE) active'
-                                : 'Order encrypted \u2022 Nobody can see your intent'
-                            }
-                        </span>
-                        {orderType === 'limit' && (
-                            <a
-                                href={getIExecExplorerAppUrl(CONTRACTS.IEXEC_IAPP)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ml-auto text-xs text-purple-400 hover:underline flex items-center gap-1"
-                            >
-                                iApp <ExternalLink className="w-3 h-3" />
-                            </a>
+                        {(orderType === 'limit' || (orderType === 'market' && mevProtection)) ? (
+                            <>
+                                <Lock className="w-4 h-4 text-purple-400" />
+                                <span className="text-[var(--text-secondary)]">
+                                    iExec DataProtector encryption (TEE) active
+                                </span>
+                                <a
+                                    href={getIExecExplorerAppUrl(CONTRACTS.IEXEC_IAPP)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="ml-auto text-xs text-purple-400 hover:underline flex items-center gap-1"
+                                >
+                                    iApp <ExternalLink className="w-3 h-3" />
+                                </a>
+                            </>
+                        ) : (
+                            <>
+                                <Handshake className="w-4 h-4 text-[var(--accent-success)]" />
+                                <span className="text-[var(--text-secondary)]">
+                                    Direct swap at live rate
+                                </span>
+                            </>
                         )}
                     </div>
+                    
+                    {/* Batch info for encrypted orders */}
+                    {(orderType === 'limit' || (orderType === 'market' && mevProtection)) && (
+                        <div className="flex items-center gap-2 text-sm">
+                            <Package className="w-4 h-4 text-[var(--accent-warning)]" />
+                            <span className="text-[var(--text-secondary)]">
+                                Batch #{displayBatchId} &bull; Processed in TEE enclave
+                            </span>
+                        </div>
+                    )}
+                    
+                    {/* CoW matching */}
                     <div className="flex items-center gap-2 text-sm">
-                        <Package className="w-4 h-4 text-[var(--accent-warning)]" />
-                        <span className="text-[var(--text-secondary)]">
-                            Batch #{displayBatchId} executes in ~{Math.floor(displayTimeRemaining / 60)}:{(displayTimeRemaining % 60).toString().padStart(2, '0')}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                        <Handshake className="w-4 h-4 text-[var(--accent-success)]" />
-                        <span className="text-[var(--text-secondary)]">
-                            May CoW match for 0 slippage
-                        </span>
+                        {(orderType === 'limit' || (orderType === 'market' && mevProtection)) ? (
+                            <>
+                                <Shield className="w-4 h-4 text-purple-400" />
+                                <span className="text-[var(--text-secondary)]">
+                                    Protected from MEV, front-running & sandwich attacks
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <Package className="w-4 h-4 text-[var(--accent-warning)]" />
+                                <span className="text-[var(--text-secondary)]">
+                                    Fast execution &bull; Enable MEV Protection for privacy
+                                </span>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -604,13 +796,19 @@ export default function SwapCard() {
                 {orderStep === 'encrypting' && (
                     <div className="mt-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
                         <div className="flex items-center gap-3 mb-3">
-                            <Lock className="w-5 h-5 text-purple-400 animate-pulse" />
+                            <Shield className="w-5 h-5 text-purple-400 animate-pulse" />
                             <div>
                                 <p className="text-sm font-medium text-purple-400">
-                                    Encrypting with iExec DataProtector...
+                                    {orderType === 'market' 
+                                        ? 'Encrypting Swap (MEV Protection)...'
+                                        : 'Encrypting Limit Order...'
+                                    }
                                 </p>
                                 <p className="text-xs text-[var(--text-muted)]">
-                                    Your order data is being encrypted in a TEE (Intel SGX)
+                                    {orderType === 'market'
+                                        ? 'Hiding swap details from sniper bots & MEV extractors'
+                                        : 'Your order data is being encrypted in a TEE (Intel SGX)'
+                                    }
                                 </p>
                             </div>
                         </div>
@@ -624,6 +822,13 @@ export default function SwapCard() {
                                 <span>grantAccess() - Authorizing iApp for TEE processing</span>
                             </div>
                         </div>
+                        {orderType === 'market' && (
+                            <div className="mt-3 ml-8 p-2 rounded-lg bg-purple-500/10">
+                                <p className="text-xs text-purple-400/80">
+                                    After encryption, your swap will be submitted to the batch system where it&apos;s processed inside a TEE enclave. Bots cannot read your order.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -634,11 +839,16 @@ export default function SwapCard() {
                             <CheckCircle2 className="w-5 h-5 text-[var(--accent-success)]" />
                             <div>
                                 <p className="text-sm font-medium text-[var(--accent-success)]">
-                                    {orderType === 'market' ? 'Swap Complete!' : 'Order Submitted!'}
+                                    {orderType === 'market' 
+                                        ? (mevProtection ? 'Private Swap Submitted!' : 'Swap Complete!')
+                                        : 'Order Submitted!'
+                                    }
                                 </p>
                                 <p className="text-xs text-[var(--text-muted)]">
                                     {orderType === 'market' 
-                                        ? `Swapped ${fromToken?.symbol} to ${toToken?.symbol}`
+                                        ? (mevProtection 
+                                            ? `Encrypted swap queued in batch #${displayBatchId} - invisible to MEV bots`
+                                            : `Swapped ${fromToken?.symbol} to ${toToken?.symbol}`)
                                         : `Your encrypted order is now in batch #${displayBatchId}`
                                     }
                                 </p>
@@ -660,7 +870,7 @@ export default function SwapCard() {
                                 </a>
                             )}
                             
-                            {/* iExec Explorer links for limit orders with real encryption */}
+                            {/* iExec Explorer links for orders with real encryption (limit + private market) */}
                             {iExecResult?.isRealEncryption && iExecResult.protectedDataAddress && (
                                 <div className="pt-2 border-t border-[var(--border-secondary)] space-y-1.5">
                                     <p className="text-xs text-purple-400 font-medium text-center flex items-center justify-center gap-1">
@@ -709,7 +919,7 @@ export default function SwapCard() {
                     disabled={!isConnected || !isValidOrder || isLoading}
                     isLoading={isLoading}
                     onClick={handleButtonClick}
-                    leftIcon={orderStep === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                    leftIcon={orderStep === 'success' ? <CheckCircle2 className="w-4 h-4" /> : (mevProtection || orderType === 'limit') ? <Shield className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                 >
                     {getButtonText()}
                 </Button>
