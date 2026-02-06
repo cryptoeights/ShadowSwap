@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { formatUnits } from 'viem';
 import { Clock, CheckCircle2, XCircle, AlertTriangle, Zap, RefreshCw, TrendingUp, TrendingDown, Radio, Wifi, WifiOff } from 'lucide-react';
@@ -173,14 +173,27 @@ function LimitOrderCard({ orderId, onRefresh }: { orderId: `0x${string}`; onRefr
         }
     }, [isCancelSuccess, cancelHash]);
 
-    // Refresh on execute/cancel success
+    // Refresh on execute/cancel success (use ref to avoid infinite loop)
+    const hasHandledExecute = useRef(false);
+    const hasHandledCancel = useRef(false);
+
     useEffect(() => {
-        if (isExecuteSuccess || isCancelSuccess) {
+        if (isExecuteSuccess && !hasHandledExecute.current) {
+            hasHandledExecute.current = true;
             refetchOrder();
             refetchCanExecute();
             onRefresh();
         }
-    }, [isExecuteSuccess, isCancelSuccess, refetchOrder, refetchCanExecute, onRefresh]);
+    }, [isExecuteSuccess, refetchOrder, refetchCanExecute, onRefresh]);
+
+    useEffect(() => {
+        if (isCancelSuccess && !hasHandledCancel.current) {
+            hasHandledCancel.current = true;
+            refetchOrder();
+            refetchCanExecute();
+            onRefresh();
+        }
+    }, [isCancelSuccess, refetchOrder, refetchCanExecute, onRefresh]);
 
     if (!order || order.limitPrice === BigInt(0)) {
         return null; // Not a limit order
@@ -323,14 +336,16 @@ function LivePriceTicker() {
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [isLive, setIsLive] = useState(false);
     const [priceChange, setPriceChange] = useState<number>(0);
+    const prevPriceRef = useRef<number>(0);
     
     const fetchPrice = useCallback(async () => {
         try {
             const price = await getTokenPrice('mETH');
             if (price > 0) {
-                if (ethPrice > 0) {
-                    setPriceChange(((price - ethPrice) / ethPrice) * 100);
+                if (prevPriceRef.current > 0) {
+                    setPriceChange(((price - prevPriceRef.current) / prevPriceRef.current) * 100);
                 }
+                prevPriceRef.current = price;
                 setEthPrice(price);
                 setLastUpdate(new Date());
                 setIsLive(true);
@@ -338,7 +353,7 @@ function LivePriceTicker() {
         } catch {
             setIsLive(false);
         }
-    }, [ethPrice]);
+    }, []);
     
     useEffect(() => {
         fetchPrice();
@@ -436,7 +451,7 @@ export default function LimitOrdersPanel() {
     }, [publicClient]);
 
     // Fetch user's order IDs
-    const fetchUserOrders = async () => {
+    const fetchUserOrders = useCallback(async () => {
         if (!publicClient || !address) return;
         
         setIsLoading(true);
@@ -483,7 +498,7 @@ export default function LimitOrdersPanel() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [publicClient, address]);
 
     // Initial fetch and auto-refresh
     useEffect(() => {
@@ -492,7 +507,7 @@ export default function LimitOrdersPanel() {
         // Auto-refresh every 30 seconds
         const interval = setInterval(fetchUserOrders, 30000);
         return () => clearInterval(interval);
-    }, [address, publicClient, lastRefresh]);
+    }, [fetchUserOrders, lastRefresh]);
 
     // Refresh after price sync
     useEffect(() => {
@@ -501,9 +516,9 @@ export default function LimitOrdersPanel() {
         }
     }, [isSyncSuccess]);
 
-    const handleRefresh = () => {
+    const handleRefresh = useCallback(() => {
         setLastRefresh(Date.now());
-    };
+    }, []);
 
     if (!isConnected) {
         return (
