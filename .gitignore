@@ -60,3 +60,10 @@ typechain-types/
 *.key
 *.pem
 secrets.json
+
+# iExec test directory (contains credentials)
+iexec-test/
+
+# iExec wallet files
+*.json.bak
+walletFileName

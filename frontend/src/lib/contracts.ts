@@ -7,7 +7,7 @@ export const CONTRACTS = {
     SHADOW_POOL: (process.env.NEXT_PUBLIC_SHADOW_POOL_ADDRESS || '0xfFCdCE40dfD214F2e13F67d9337B0E0e22024F09') as `0x${string}`,
     PRICE_FEED: (process.env.NEXT_PUBLIC_PRICE_FEED_ADDRESS || '0xb87889a99AcCF70a2aeA7F63Fdcde302fCd2e006') as `0x${string}`,
     SHADOW_HOOK: (process.env.NEXT_PUBLIC_SHADOW_HOOK_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
-    IEXEC_IAPP: (process.env.NEXT_PUBLIC_IEXEC_IAPP_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+    IEXEC_IAPP: (process.env.NEXT_PUBLIC_IEXEC_IAPP_ADDRESS || '0x834255dF01eE89d5096371a7eeFaF4332d4e2bfF') as `0x${string}`,
 } as const;
 
 // ShadowPool ABI - Core functions for order management

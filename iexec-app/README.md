@@ -71,7 +71,7 @@ After deploying, update the frontend configuration:
 
 ```bash
 # frontend/.env.local
-NEXT_PUBLIC_IEXEC_IAPP_ADDRESS=<your-deployed-iapp-address>
+NEXT_PUBLIC_IEXEC_IAPP_ADDRESS=0x834255dF01eE89d5096371a7eeFaF4332d4e2bfF
 ```
 
 The frontend `encryption.ts` will then use the real DataProtector flow:

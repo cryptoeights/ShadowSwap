@@ -1,9 +1,6 @@
 {
-  "name": "shadowswap-order-processor",
-  "language": "javascript",
-  "framework": "nodejs",
-  "docker": {
-    "image": "node:18-alpine",
-    "cmd": ["node", "src/app.js"]
-  }
+  "defaultChain": "arbitrum-sepolia-testnet",
+  "projectName": "shadowswap-order-processor",
+  "template": "JavaScript",
+  "dockerhubUsername": "cryptoeights"
 }

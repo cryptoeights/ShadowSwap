@@ -1,12 +1,14 @@
 {
-  "name": "shadowswap-iapp",
+  "name": "shadowswap-order-processor",
   "version": "1.0.0",
+  "type": "module",
   "description": "ShadowSwap iExec iApp - Processes encrypted DEX orders in TEE for MEV protection",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
-    "test": "node src/app.js"
+    "start": "node src/app.js"
   },
-  "keywords": ["iexec", "tee", "dex", "mev-protection", "batch-auction"],
+  "dependencies": {
+    "iexec": "^8.22.4"
+  },
   "license": "MIT"
 }

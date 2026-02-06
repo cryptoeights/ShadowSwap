@@ -120,7 +120,8 @@ const protectedData = await dataProtector.protectData({
 The order processor iApp runs inside Intel SGX enclaves to decrypt and process orders:
 
 ```
-iexec-app/src/app.js  →  Deploy with: iapp deploy --chain arbitrum-sepolia
+iexec-app/src/app.js  →  Deployed iApp: 0x834255dF01eE89d5096371a7eeFaF4332d4e2bfF
+Docker Image: cryptoeights/shadowswap-order-processor:1.0.0-tee-scone-5.9.1-v16-prod-59e7aa07604b
 ```
 
 The iApp handles:
@@ -291,6 +292,7 @@ The demo showcases:
 | mDAI | `0xda222533d71C37A9370C6b5a26BcB4C07EcB0454` | [View](https://sepolia.arbiscan.io/address/0xda222533d71C37A9370C6b5a26BcB4C07EcB0454) |
 | mWETH | `0xe160dc7BD1E9d63A47a1d4CD082c332DD19D870c` | [View](https://sepolia.arbiscan.io/address/0xe160dc7BD1E9d63A47a1d4CD082c332DD19D870c) |
 | mETH | `0x62b64cC9B1Aa2F2c9d612f0b4a58Cfba0eEc9bE2` | [View](https://sepolia.arbiscan.io/address/0x62b64cC9B1Aa2F2c9d612f0b4a58Cfba0eEc9bE2) |
+| iExec iApp (TEE) | `0x834255dF01eE89d5096371a7eeFaF4332d4e2bfF` | [View](https://sepolia.arbiscan.io/address/0x834255dF01eE89d5096371a7eeFaF4332d4e2bfF) |
 
 ### Key Functions
 

@@ -68,7 +68,7 @@ Update the frontend to use your deployed iApp:
 
 ```bash
 # frontend/.env.local
-NEXT_PUBLIC_IEXEC_IAPP_ADDRESS=<your-iapp-address>
+NEXT_PUBLIC_IEXEC_IAPP_ADDRESS=0x834255dF01eE89d5096371a7eeFaF4332d4e2bfF
 ```
 
 Also update `frontend/src/lib/contracts.ts`:
