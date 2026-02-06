@@ -24,7 +24,7 @@ import {
     syncPricesAndGetQuote,
 } from '@/hooks/useShadowPool';
 import { useSwapPrice } from '@/hooks/usePrices';
-import { encryptOrderSimple } from '@/lib/encryption';
+import { encryptOrder } from '@/lib/encryption';
 import { saveTransaction, updateTransactionStatus, getArbiscanTxUrl } from '@/lib/transactionHistory';
 
 type OrderType = 'market' | 'limit';
@@ -235,7 +235,7 @@ export default function SwapCard() {
                     expiry: Math.floor(Date.now() / 1000) + 86400,
                 };
 
-                const { encryptedData, datasetAddress } = await encryptOrderSimple(orderData, address);
+                const { encryptedData, datasetAddress } = await encryptOrder(orderData, address);
 
                 // Debug logging
                 console.log('=== SUBMIT LIMIT ORDER DEBUG ===');

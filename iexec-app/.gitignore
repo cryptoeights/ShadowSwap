@@ -1,0 +1,4 @@
+node_modules/
+.env
+iexec-app.json
+docker-compose.yml

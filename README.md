@@ -115,7 +115,21 @@ const protectedData = await dataProtector.protectData({
 });
 ```
 
-📖 **[Full iExec Integration Details](docs/IEXEC_INTEGRATION.md)** | 📝 **[iExec Tools Feedback](FEEDBACK.md)**
+**iExec iApp (TEE Application):**
+
+The order processor iApp runs inside Intel SGX enclaves to decrypt and process orders:
+
+```
+iexec-app/src/app.js  →  Deploy with: iapp deploy --chain arbitrum-sepolia
+```
+
+The iApp handles:
+- Decrypting order data inside TEE (invisible to outside)
+- Validating order parameters (tokens, amounts, prices)
+- Matching orders at uniform clearing price
+- Outputting settlement results
+
+📖 **[Full iExec Integration](docs/IEXEC_INTEGRATION.md)** | 🚀 **[iApp Deployment Guide](docs/IEXEC_IAPP_DEPLOYMENT.md)** | 📝 **[Feedback](FEEDBACK.md)**
 
 ---
 
@@ -128,9 +142,16 @@ const protectedData = await dataProtector.protectData({
 │  │  Swap    │  │ Limit    │  │Dashboard │  │    Analytics     │ │
 │  │  Card    │  │ Orders   │  │          │  │                  │ │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────────┬─────────┘ │
-└───────┼─────────────┼─────────────┼──────────────────┼──────────┘
-        │             │             │                  │
-        ▼             ▼             ▼                  ▼
+│       │             │             │                  │           │
+│       ▼             ▼             │                  │           │
+│  ┌──────────────────────────┐    │                  │           │
+│  │  iExec DataProtector SDK │    │                  │           │
+│  │  • protectData()         │    │                  │           │
+│  │  • grantAccess()         │    │                  │           │
+│  └────────────┬─────────────┘    │                  │           │
+└───────────────┼──────────────────┼──────────────────┼───────────┘
+                │                  │                  │
+                ▼                  ▼                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Smart Contracts (Arbitrum Sepolia)            │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -145,6 +166,16 @@ const protectedData = await dataProtector.protectData({
 └─────────────────────────────────────────────────────────────────┘
         ▲                                          │
         │                                          ▼
+┌───────┴─────────────────────────────────────────────────────────┐
+│                    iExec iApp (TEE - Intel SGX)                  │
+│  iexec-app/src/app.js                                           │
+│  • Decrypts order data inside TEE enclave                       │
+│  • Validates order parameters                                   │
+│  • Matches orders at uniform clearing price                     │
+│  • Settlement results output                                    │
+└─────────────────────────────────────────────────────────────────┘
+        ▲
+        │
 ┌───────┴─────────────────────────────────────────────────────────┐
 │                        Keeper Bot (Node.js)                      │
 │  • Fetches live prices from CoinGecko                           │
@@ -180,6 +211,10 @@ npm install
 
 # Keeper Bot
 cd ../keeper-bot
+npm install
+
+# iExec iApp
+cd ../iexec-app
 npm install
 
 # Smart Contracts (Foundry)
@@ -225,6 +260,7 @@ npm start
 | [Deployment Guide](docs/DEPLOYMENT.md) | How to deploy smart contracts |
 | [Architecture](docs/ARCHITECTURE.md) | System design and flow |
 | [iExec Integration](docs/IEXEC_INTEGRATION.md) | DataProtector usage |
+| [iApp Deployment](docs/IEXEC_IAPP_DEPLOYMENT.md) | Build & deploy the iExec iApp |
 | [API Reference](docs/API.md) | Smart contract functions |
 
 ---
@@ -384,10 +420,11 @@ npm run dev
 This project was built from scratch during the hackathon:
 
 1. **Smart Contracts**: ShadowPool with batch auctions, limit orders, instant swaps
-2. **iExec Integration**: DataProtector encryption for order confidentiality
-3. **Frontend**: Complete dApp with swap interface, limit orders, dashboard
-4. **Keeper Bot**: Automated price monitoring and order execution
-5. **Documentation**: Comprehensive setup and usage guides
+2. **iExec iApp**: TEE application for confidential order processing (`iexec-app/`)
+3. **iExec DataProtector**: Order encryption in frontend (`frontend/src/lib/encryption.ts`)
+4. **Frontend**: Complete dApp with swap interface, limit orders, dashboard
+5. **Keeper Bot**: Automated price monitoring and order execution
+6. **Documentation**: Comprehensive setup, deployment, and usage guides
 
 ### Technologies Used
 

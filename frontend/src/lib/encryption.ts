@@ -10,7 +10,7 @@ declare global {
     }
 }
 
-// Order data structure that will be encrypted
+// Order data structure that will be encrypted using iExec DataProtector
 export interface OrderData {
     type: 'market' | 'limit';
     direction: 'buy' | 'sell';
@@ -27,6 +27,8 @@ export interface OrderData {
 export interface EncryptedOrderResult {
     encryptedData: `0x${string}`;
     datasetAddress: `0x${string}`;
+    protectedDataAddress?: string; // iExec protected data address
+    isRealEncryption: boolean; // true if iExec DataProtector was used
 }
 
 /**
@@ -39,8 +41,34 @@ function generateNonce(): string {
 }
 
 /**
- * Encrypt order data using iExec DataProtector (loaded dynamically to avoid SSR issues)
+ * ============================================================
+ * iExec DataProtector Integration
+ * ============================================================
+ *
+ * This module uses iExec DataProtector SDK to encrypt order data
+ * before on-chain submission. The encryption flow:
+ *
+ * 1. Create order data object with trade details
+ * 2. Call dataProtector.core.protectData() to encrypt and store on IPFS
+ * 3. Call dataProtector.core.grantAccess() to authorize our iApp
+ * 4. Return encrypted reference for on-chain storage
+ *
+ * The iApp (iexec-app/) processes orders in a TEE:
+ * - Decrypts order data inside Intel SGX enclave
+ * - Validates order parameters
+ * - Matches orders at uniform clearing price
+ * - No external party can see order details
+ *
+ * Privacy: Order details (amounts, prices, tokens) are hidden from
+ * validators, MEV bots, and any observers.
+ * ============================================================
+ */
+
+/**
+ * Encrypt order data using iExec DataProtector
  * This keeps order details confidential until batch execution in TEE
+ *
+ * @see https://docs.iex.ec/get-started/helloWorld/2-protectData
  */
 export async function encryptOrder(
     orderData: Omit<OrderData, 'timestamp' | 'nonce'>,
@@ -55,85 +83,136 @@ export async function encryptOrder(
         throw new Error('Ethereum provider not found. Please install MetaMask or another wallet.');
     }
 
-    // Use simple encryption fallback if iExec is not configured
-    if (CONTRACTS.IEXEC_IAPP === '0x0000000000000000000000000000000000000000') {
-        console.warn('iExec iApp not configured, using simple encryption fallback');
-        return encryptOrderSimple(orderData, userAddress);
-    }
-
-    try {
-        // Dynamically import iExec DataProtector to avoid SSR issues
-        const { IExecDataProtector } = await import('@iexec/dataprotector');
-
-        // Note: isExperimental is required for Arbitrum Sepolia but missing from SDK types
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const dataProtector = new IExecDataProtector(window.ethereum as any, {
-            isExperimental: true,
-        } as any);
-
-        const fullOrderData: OrderData = {
-            ...orderData,
-            timestamp: Date.now(),
-            nonce: generateNonce(),
-        };
-
-        const protectedData = await dataProtector.core.protectData({
-            data: {
-                orderType: fullOrderData.type,
-                direction: fullOrderData.direction,
-                tokenIn: fullOrderData.tokenIn,
-                tokenOut: fullOrderData.tokenOut,
-                amountIn: fullOrderData.amountIn,
-                amountOutMin: fullOrderData.amountOutMin || '',
-                limitPrice: fullOrderData.limitPrice || '',
-                expiry: fullOrderData.expiry?.toString() || '',
-                timestamp: fullOrderData.timestamp.toString(),
-                nonce: fullOrderData.nonce,
-                owner: userAddress,
-            },
-            name: `ShadowSwap-Order-${Date.now()}`,
-        });
-
-        await dataProtector.core.grantAccess({
-            protectedData: protectedData.address,
-            authorizedApp: CONTRACTS.IEXEC_IAPP,
-            authorizedUser: '0x0000000000000000000000000000000000000000',
-        });
-
-        const datasetAddressBytes32 = protectedData.address.padEnd(66, '0') as `0x${string}`;
-
-        const encoder = new TextEncoder();
-        const data = encoder.encode(JSON.stringify(fullOrderData));
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const encryptedData = ('0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
-
-        return {
-            encryptedData,
-            datasetAddress: datasetAddressBytes32,
-        };
-    } catch (error) {
-        console.error('iExec encryption failed, falling back to simple encryption:', error);
-        return encryptOrderSimple(orderData, userAddress);
-    }
-}
-
-/**
- * Simple encryption for testing/development without iExec
- * WARNING: This is NOT secure - only for development/testing
- */
-export async function encryptOrderSimple(
-    orderData: Omit<OrderData, 'timestamp' | 'nonce'>,
-    userAddress: string
-): Promise<EncryptedOrderResult> {
     const fullOrderData: OrderData = {
         ...orderData,
         timestamp: Date.now(),
         nonce: generateNonce(),
     };
 
+    // Check if iExec iApp is configured (deployed address)
+    const iAppConfigured = CONTRACTS.IEXEC_IAPP !== '0x0000000000000000000000000000000000000000';
+
+    if (!iAppConfigured) {
+        console.warn('[ShadowSwap] iExec iApp not configured. Using development fallback.');
+        console.warn('[ShadowSwap] To enable real encryption, deploy the iApp and set NEXT_PUBLIC_IEXEC_IAPP_ADDRESS');
+        return encryptOrderFallback(fullOrderData, userAddress);
+    }
+
+    // Attempt real iExec DataProtector encryption
+    try {
+        return await encryptWithDataProtector(fullOrderData, userAddress);
+    } catch (error) {
+        console.error('[ShadowSwap] iExec DataProtector encryption failed:', error);
+        console.warn('[ShadowSwap] Falling back to development encryption');
+        return encryptOrderFallback(fullOrderData, userAddress);
+    }
+}
+
+/**
+ * Real encryption using iExec DataProtector SDK
+ *
+ * Flow:
+ * 1. Import and initialize DataProtector SDK
+ * 2. Protect order data (encrypts + stores on IPFS)
+ * 3. Grant access to our iApp for TEE processing
+ * 4. Return protected data reference
+ *
+ * @see https://docs.iex.ec/get-started/helloWorld/2-protectData
+ * @see https://docs.iex.ec/get-started/helloWorld/4-manageDataAccess
+ */
+async function encryptWithDataProtector(
+    orderData: OrderData,
+    userAddress: string
+): Promise<EncryptedOrderResult> {
+    console.log('[ShadowSwap] Encrypting order with iExec DataProtector...');
+
+    // Step 1: Dynamically import iExec DataProtector (avoids SSR issues)
+    const { IExecDataProtector } = await import('@iexec/dataprotector');
+
+    // Step 2: Initialize DataProtector with user's wallet provider
+    // isExperimental flag is needed for Arbitrum Sepolia support
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dataProtector = new IExecDataProtector(window.ethereum as any, {
+        isExperimental: true,
+    } as any);
+
+    // Step 3: Protect the order data
+    // This encrypts the data with a symmetric key, stores it on IPFS,
+    // and registers ownership as an NFT on the blockchain
+    console.log('[ShadowSwap] Calling dataProtector.core.protectData()...');
+    const protectedData = await dataProtector.core.protectData({
+        data: {
+            // Order type and direction
+            orderType: orderData.type,
+            direction: orderData.direction,
+            // Token pair
+            tokenIn: orderData.tokenIn,
+            tokenOut: orderData.tokenOut,
+            // Amounts (as strings for precision)
+            amountIn: orderData.amountIn,
+            amountOutMin: orderData.amountOutMin || '0',
+            // Limit order specific
+            limitPrice: orderData.limitPrice || '0',
+            expiry: orderData.expiry?.toString() || '0',
+            // Metadata
+            timestamp: orderData.timestamp.toString(),
+            nonce: orderData.nonce,
+            owner: userAddress,
+        },
+        name: `ShadowSwap-Order-${Date.now()}`,
+    });
+
+    console.log('[ShadowSwap] Data protected! Address:', protectedData.address);
+
+    // Step 4: Grant access to our iApp for TEE processing
+    // This authorizes the deployed iApp to decrypt and process the order
+    // authorizedUser = 0x0...0 means any user can trigger the execution
+    console.log('[ShadowSwap] Granting access to iApp:', CONTRACTS.IEXEC_IAPP);
+    await dataProtector.core.grantAccess({
+        protectedData: protectedData.address,
+        authorizedApp: CONTRACTS.IEXEC_IAPP,
+        authorizedUser: '0x0000000000000000000000000000000000000000',
+    });
+
+    console.log('[ShadowSwap] Access granted! Order encrypted and ready for submission.');
+
+    // Step 5: Create references for on-chain storage
+    // The smart contract stores the protected data address and a hash
+    const datasetAddressBytes32 = protectedData.address.padEnd(66, '0') as `0x${string}`;
+
     const encoder = new TextEncoder();
-    const data = encoder.encode(JSON.stringify({ ...fullOrderData, owner: userAddress }));
+    const data = encoder.encode(JSON.stringify(orderData));
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const encryptedData = ('0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
+
+    return {
+        encryptedData,
+        datasetAddress: datasetAddressBytes32,
+        protectedDataAddress: protectedData.address,
+        isRealEncryption: true,
+    };
+}
+
+/**
+ * Development fallback encryption (NOT secure)
+ *
+ * Used when:
+ * - iExec iApp is not deployed yet (address = 0x0)
+ * - DataProtector SDK is not available
+ * - Running in development/testing mode
+ *
+ * WARNING: This does NOT provide real encryption.
+ * Deploy the iApp and configure NEXT_PUBLIC_IEXEC_IAPP_ADDRESS for production.
+ */
+export async function encryptOrderFallback(
+    orderData: OrderData,
+    userAddress: string
+): Promise<EncryptedOrderResult> {
+    console.log('[ShadowSwap] Using development encryption fallback');
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode(JSON.stringify({ ...orderData, owner: userAddress }));
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const encryptedData = ('0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
@@ -146,11 +225,18 @@ export async function encryptOrderSimple(
     return {
         encryptedData,
         datasetAddress,
+        isRealEncryption: false,
     };
 }
 
 /**
- * Check if iExec DataProtector is available
+ * Check if iExec DataProtector is available and configured
+ *
+ * Returns true if:
+ * - Running in browser
+ * - Ethereum provider available
+ * - iApp address is configured (not zero)
+ * - DataProtector SDK can be imported
  */
 export async function isDataProtectorAvailable(): Promise<boolean> {
     if (typeof window === 'undefined' || !window.ethereum) {
@@ -167,4 +253,23 @@ export async function isDataProtectorAvailable(): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+/**
+ * Get DataProtector status for UI display
+ */
+export function getDataProtectorStatus(): {
+    configured: boolean;
+    iAppAddress: string;
+    message: string;
+} {
+    const configured = CONTRACTS.IEXEC_IAPP !== '0x0000000000000000000000000000000000000000';
+
+    return {
+        configured,
+        iAppAddress: CONTRACTS.IEXEC_IAPP,
+        message: configured
+            ? `iExec DataProtector active (iApp: ${CONTRACTS.IEXEC_IAPP.slice(0, 10)}...)`
+            : 'Development mode - deploy iApp for real encryption',
+    };
 }
