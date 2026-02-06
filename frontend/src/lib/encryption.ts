@@ -297,7 +297,7 @@ export function getDataProtectorStatus(): {
 // iExec Explorer URL Helpers
 // ============================================================
 
-export const IEXEC_EXPLORER_BASE = 'https://explorer.iex.ec/bellecour';
+export const IEXEC_EXPLORER_BASE = 'https://explorer.iex.ec/arbitrum-sepolia-testnet';
 
 /**
  * Get iExec Explorer URL for a protected dataset
