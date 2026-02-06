@@ -12,6 +12,8 @@ import {
     TrendingUp,
     Download,
     Loader2,
+    Lock,
+    Shield,
 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { 
@@ -143,11 +145,34 @@ function TransactionRow({ tx }: { tx: Transaction }) {
                 </div>
             </div>
             
-            {/* Transaction Hash */}
+            {/* Transaction Hash & iExec Links */}
             <div className="mt-2 pt-2 border-t border-[var(--border-secondary)]">
-                <span className="text-xs font-mono text-[var(--text-muted)]">
-                    {tx.hash.slice(0, 14)}...{tx.hash.slice(-12)}
-                </span>
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono text-[var(--text-muted)]">
+                        {tx.hash.slice(0, 14)}...{tx.hash.slice(-12)}
+                    </span>
+                    {/* iExec DataProtector badge */}
+                    {tx.isRealEncryption && (
+                        <span className="flex items-center gap-1 text-xs text-purple-400">
+                            <Shield className="w-3 h-3" />
+                            TEE Encrypted
+                        </span>
+                    )}
+                </div>
+                {/* iExec Explorer link */}
+                {tx.iExecExplorerUrl && tx.iExecProtectedDataAddress && (
+                    <a
+                        href={tx.iExecExplorerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1.5 flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 hover:underline"
+                    >
+                        <Lock className="w-3 h-3" />
+                        iExec Protected Data: {tx.iExecProtectedDataAddress.slice(0, 10)}...{tx.iExecProtectedDataAddress.slice(-6)}
+                        <ExternalLink className="w-3 h-3" />
+                    </a>
+                )}
             </div>
         </a>
     );

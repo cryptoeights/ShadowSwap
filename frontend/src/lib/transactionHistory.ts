@@ -10,6 +10,10 @@ export interface Transaction {
     timestamp: number;
     status: 'pending' | 'success' | 'failed';
     limitPrice?: string;
+    // iExec DataProtector tracking
+    iExecProtectedDataAddress?: string; // dataset address on iExec chain
+    iExecExplorerUrl?: string; // link to iExec Explorer
+    isRealEncryption?: boolean; // true if iExec DataProtector was used
 }
 
 const STORAGE_KEY = 'auction_dex_transactions';

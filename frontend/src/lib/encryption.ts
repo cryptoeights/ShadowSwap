@@ -28,6 +28,9 @@ export interface EncryptedOrderResult {
     encryptedData: `0x${string}`;
     datasetAddress: `0x${string}`;
     protectedDataAddress?: string; // iExec protected data address
+    protectedDataTxHash?: string; // tx hash of protectData on iExec chain
+    grantAccessTxHash?: string; // tx hash of grantAccess on iExec chain
+    iExecExplorerUrl?: string; // URL to view on iExec Explorer
     isRealEncryption: boolean; // true if iExec DataProtector was used
 }
 
@@ -163,20 +166,33 @@ async function encryptWithDataProtector(
     });
 
     console.log('[ShadowSwap] Data protected! Address:', protectedData.address);
+    console.log('[ShadowSwap] protectData response:', JSON.stringify(protectedData, null, 2));
+
+    // Capture the protectData transaction hash if available
+    const protectedDataTxHash = (protectedData as Record<string, unknown>).transactionHash as string | undefined;
+    if (protectedDataTxHash) {
+        console.log('[ShadowSwap] protectData txHash:', protectedDataTxHash);
+    }
 
     // Step 4: Grant access to our iApp for TEE processing
     // This authorizes the deployed iApp to decrypt and process the order
     // authorizedUser = 0x0...0 means any user can trigger the execution
     console.log('[ShadowSwap] Granting access to iApp:', CONTRACTS.IEXEC_IAPP);
-    await dataProtector.core.grantAccess({
+    const grantedAccess = await dataProtector.core.grantAccess({
         protectedData: protectedData.address,
         authorizedApp: CONTRACTS.IEXEC_IAPP,
         authorizedUser: '0x0000000000000000000000000000000000000000',
     });
 
-    console.log('[ShadowSwap] Access granted! Order encrypted and ready for submission.');
+    console.log('[ShadowSwap] Access granted! Response:', JSON.stringify(grantedAccess, null, 2));
+    const grantAccessTxHash = (grantedAccess as Record<string, unknown>).txHash as string | undefined;
 
-    // Step 5: Create references for on-chain storage
+    // Step 5: Build iExec Explorer URL for tracking
+    // protectData creates a dataset on the iExec chain viewable at explorer.iex.ec
+    const iExecExplorerUrl = getIExecExplorerDatasetUrl(protectedData.address);
+    console.log('[ShadowSwap] View on iExec Explorer:', iExecExplorerUrl);
+
+    // Step 6: Create references for on-chain storage
     // The smart contract stores the protected data address and a hash
     const datasetAddressBytes32 = protectedData.address.padEnd(66, '0') as `0x${string}`;
 
@@ -190,6 +206,9 @@ async function encryptWithDataProtector(
         encryptedData,
         datasetAddress: datasetAddressBytes32,
         protectedDataAddress: protectedData.address,
+        protectedDataTxHash,
+        grantAccessTxHash,
+        iExecExplorerUrl,
         isRealEncryption: true,
     };
 }
@@ -272,4 +291,32 @@ export function getDataProtectorStatus(): {
             ? `iExec DataProtector active (iApp: ${CONTRACTS.IEXEC_IAPP.slice(0, 10)}...)`
             : 'Development mode - deploy iApp for real encryption',
     };
+}
+
+// ============================================================
+// iExec Explorer URL Helpers
+// ============================================================
+
+export const IEXEC_EXPLORER_BASE = 'https://explorer.iex.ec/bellecour';
+
+/**
+ * Get iExec Explorer URL for a protected dataset
+ * protectData() creates a dataset NFT on the iExec sidechain
+ */
+export function getIExecExplorerDatasetUrl(datasetAddress: string): string {
+    return `${IEXEC_EXPLORER_BASE}/dataset/${datasetAddress}`;
+}
+
+/**
+ * Get iExec Explorer URL for an iApp
+ */
+export function getIExecExplorerAppUrl(appAddress: string): string {
+    return `${IEXEC_EXPLORER_BASE}/app/${appAddress}`;
+}
+
+/**
+ * Get iExec Explorer URL for a deal (order execution)
+ */
+export function getIExecExplorerDealUrl(dealId: string): string {
+    return `${IEXEC_EXPLORER_BASE}/deal/${dealId}`;
 }

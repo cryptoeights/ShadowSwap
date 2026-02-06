@@ -24,7 +24,8 @@ import {
     syncPricesAndGetQuote,
 } from '@/hooks/useShadowPool';
 import { useSwapPrice } from '@/hooks/usePrices';
-import { encryptOrder } from '@/lib/encryption';
+import { encryptOrder, EncryptedOrderResult, getIExecExplorerAppUrl } from '@/lib/encryption';
+import { CONTRACTS } from '@/lib/contracts';
 import { saveTransaction, updateTransactionStatus, getArbiscanTxUrl } from '@/lib/transactionHistory';
 
 type OrderType = 'market' | 'limit';
@@ -127,6 +128,9 @@ export default function SwapCard() {
     
     // State for last transaction
     const [lastTxHash, setLastTxHash] = useState<`0x${string}` | null>(null);
+    
+    // iExec DataProtector encryption result (for showing Explorer links)
+    const [iExecResult, setIExecResult] = useState<EncryptedOrderResult | null>(null);
 
     // Live price
     const { rate: exchangeRate, calculateOutput } = useSwapPrice(
@@ -235,12 +239,21 @@ export default function SwapCard() {
                     expiry: Math.floor(Date.now() / 1000) + 86400,
                 };
 
-                const { encryptedData, datasetAddress } = await encryptOrder(orderData, address);
+                const encryptionResult = await encryptOrder(orderData, address);
+                const { encryptedData, datasetAddress } = encryptionResult;
+                
+                // Store iExec result for UI display
+                setIExecResult(encryptionResult);
 
                 // Debug logging
                 console.log('=== SUBMIT LIMIT ORDER DEBUG ===');
                 console.log('encryptedData:', encryptedData, 'length:', encryptedData.length);
                 console.log('datasetAddress:', datasetAddress, 'length:', datasetAddress.length);
+                console.log('isRealEncryption:', encryptionResult.isRealEncryption);
+                if (encryptionResult.protectedDataAddress) {
+                    console.log('iExec Protected Data:', encryptionResult.protectedDataAddress);
+                    console.log('iExec Explorer:', encryptionResult.iExecExplorerUrl);
+                }
                 console.log('tokenIn:', fromToken.address);
                 console.log('tokenOut:', toToken.address);
                 console.log('amountIn:', amountInBigInt.toString());
@@ -328,7 +341,7 @@ export default function SwapCard() {
         }
     }, [swapHash, fromToken, toToken, fromAmount, toAmount]);
     
-    // Save limit order transaction
+    // Save limit order transaction (with iExec DataProtector tracking)
     useEffect(() => {
         if (limitHash && fromToken && toToken) {
             saveTransaction({
@@ -340,10 +353,14 @@ export default function SwapCard() {
                 timestamp: Date.now(),
                 status: 'pending',
                 limitPrice: limitPrice,
+                // iExec DataProtector tracking
+                iExecProtectedDataAddress: iExecResult?.protectedDataAddress,
+                iExecExplorerUrl: iExecResult?.iExecExplorerUrl,
+                isRealEncryption: iExecResult?.isRealEncryption,
             });
             setLastTxHash(limitHash);
         }
-    }, [limitHash, fromToken, toToken, fromAmount, limitPrice]);
+    }, [limitHash, fromToken, toToken, fromAmount, limitPrice, iExecResult]);
     
     // Update transaction status on success
     useEffect(() => {
@@ -372,10 +389,11 @@ export default function SwapCard() {
                 setLimitPrice('');
                 setOrderStep('idle');
                 setLastTxHash(null);
+                setIExecResult(null);
                 resetSubmit?.();
                 resetLimitSubmit?.();
                 resetSwap?.();
-            }, 3000);
+            }, 5000); // Extended to 5s so user can see iExec links
         }
     }, [isSubmitSuccess, isLimitSuccess, isSwapSuccess, resetSubmit, resetLimitSubmit, resetSwap]);
 
@@ -550,10 +568,23 @@ export default function SwapCard() {
                 {/* Order Info */}
                 <div className="mt-5 p-4 rounded-xl bg-[var(--bg-tertiary)] space-y-2">
                     <div className="flex items-center gap-2 text-sm">
-                        <Lock className="w-4 h-4 text-[var(--accent-primary)]" />
+                        <Lock className="w-4 h-4 text-purple-400" />
                         <span className="text-[var(--text-secondary)]">
-                            Order encrypted &bull; Nobody can see your intent
+                            {orderType === 'limit' 
+                                ? 'iExec DataProtector encryption (TEE) active'
+                                : 'Order encrypted \u2022 Nobody can see your intent'
+                            }
                         </span>
+                        {orderType === 'limit' && (
+                            <a
+                                href={getIExecExplorerAppUrl(CONTRACTS.IEXEC_IAPP)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-auto text-xs text-purple-400 hover:underline flex items-center gap-1"
+                            >
+                                iApp <ExternalLink className="w-3 h-3" />
+                            </a>
+                        )}
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                         <Package className="w-4 h-4 text-[var(--accent-warning)]" />
@@ -568,6 +599,33 @@ export default function SwapCard() {
                         </span>
                     </div>
                 </div>
+
+                {/* Encryption Progress */}
+                {orderStep === 'encrypting' && (
+                    <div className="mt-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                        <div className="flex items-center gap-3 mb-3">
+                            <Lock className="w-5 h-5 text-purple-400 animate-pulse" />
+                            <div>
+                                <p className="text-sm font-medium text-purple-400">
+                                    Encrypting with iExec DataProtector...
+                                </p>
+                                <p className="text-xs text-[var(--text-muted)]">
+                                    Your order data is being encrypted in a TEE (Intel SGX)
+                                </p>
+                            </div>
+                        </div>
+                        <div className="space-y-2 ml-8">
+                            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                                <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                                <span>protectData() - Encrypting & storing on IPFS...</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] opacity-50">
+                                <div className="w-2 h-2 rounded-full bg-gray-500" />
+                                <span>grantAccess() - Authorizing iApp for TEE processing</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Success Message */}
                 {orderStep === 'success' && (
@@ -586,17 +644,50 @@ export default function SwapCard() {
                                 </p>
                             </div>
                         </div>
-                        {lastTxHash && (
-                            <a
-                                href={getArbiscanTxUrl(lastTxHash)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--accent-primary)] hover:underline"
-                            >
-                                View on Arbiscan
-                                <ExternalLink className="w-3 h-3" />
-                            </a>
-                        )}
+                        
+                        {/* On-chain links */}
+                        <div className="mt-3 space-y-2">
+                            {/* Arbiscan link for the swap/limit tx */}
+                            {lastTxHash && (
+                                <a
+                                    href={getArbiscanTxUrl(lastTxHash)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-center gap-2 text-xs text-[var(--accent-primary)] hover:underline"
+                                >
+                                    <ExternalLink className="w-3 h-3" />
+                                    View Transaction on Arbiscan
+                                </a>
+                            )}
+                            
+                            {/* iExec Explorer links for limit orders with real encryption */}
+                            {iExecResult?.isRealEncryption && iExecResult.protectedDataAddress && (
+                                <div className="pt-2 border-t border-[var(--border-secondary)] space-y-1.5">
+                                    <p className="text-xs text-purple-400 font-medium text-center flex items-center justify-center gap-1">
+                                        <Lock className="w-3 h-3" />
+                                        iExec DataProtector - On-Chain Records
+                                    </p>
+                                    <a
+                                        href={iExecResult.iExecExplorerUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-2 text-xs text-purple-400 hover:underline"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                        Protected Data: {iExecResult.protectedDataAddress.slice(0, 10)}...{iExecResult.protectedDataAddress.slice(-8)}
+                                    </a>
+                                    <a
+                                        href={getIExecExplorerAppUrl(CONTRACTS.IEXEC_IAPP)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-2 text-xs text-purple-400 hover:underline"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                        iApp (TEE): {CONTRACTS.IEXEC_IAPP.slice(0, 10)}...{CONTRACTS.IEXEC_IAPP.slice(-8)}
+                                    </a>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
