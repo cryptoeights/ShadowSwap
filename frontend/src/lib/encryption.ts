@@ -44,6 +44,62 @@ function generateNonce(): string {
 }
 
 /**
+ * Create a proxy provider that boosts gas fees for Arbitrum Sepolia.
+ * 
+ * The iExec DataProtector SDK internally sends eth_sendTransaction
+ * but doesn't add sufficient maxFeePerGas buffer for Arbitrum Sepolia,
+ * causing "max fee per gas less than block base fee" errors.
+ * 
+ * This proxy intercepts those calls and injects proper EIP-1559 gas params.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createGasBoostedProvider(provider: any): any {
+    return new Proxy(provider, {
+        get(target, prop) {
+            if (prop === 'request') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return async (args: any) => {
+                    if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
+                        try {
+                            // Fetch latest block to get current baseFeePerGas
+                            const block = await target.request({
+                                method: 'eth_getBlockByNumber',
+                                params: ['latest', false],
+                            });
+                            
+                            if (block?.baseFeePerGas) {
+                                const baseFee = parseInt(block.baseFeePerGas, 16);
+                                // Add 100% buffer to base fee to handle fluctuations
+                                const maxFeePerGas = Math.ceil(baseFee * 2);
+                                const maxPriorityFeePerGas = 1500000; // ~0.0015 gwei tip
+                                
+                                const tx = args.params[0];
+                                tx.maxFeePerGas = '0x' + maxFeePerGas.toString(16);
+                                tx.maxPriorityFeePerGas = '0x' + maxPriorityFeePerGas.toString(16);
+                                
+                                // Remove legacy gasPrice if present (conflicts with EIP-1559)
+                                delete tx.gasPrice;
+                                
+                                console.log(`[ShadowSwap] Gas boost: baseFee=${baseFee}, maxFee=${maxFeePerGas}, tip=${maxPriorityFeePerGas}`);
+                            }
+                        } catch (err) {
+                            console.warn('[ShadowSwap] Gas boost failed, using defaults:', err);
+                        }
+                    }
+                    return target.request(args);
+                };
+            }
+            // Proxy all other properties/methods through unchanged
+            const value = target[prop];
+            if (typeof value === 'function') {
+                return value.bind(target);
+            }
+            return value;
+        }
+    });
+}
+
+/**
  * ============================================================
  * iExec DataProtector Integration
  * ============================================================
@@ -132,10 +188,15 @@ async function encryptWithDataProtector(
     // Step 1: Dynamically import iExec DataProtector (avoids SSR issues)
     const { IExecDataProtector } = await import('@iexec/dataprotector');
 
-    // Step 2: Initialize DataProtector with user's wallet provider
+    // Step 2: Initialize DataProtector with gas-boosted provider
+    // The raw window.ethereum provider doesn't add sufficient gas for Arbitrum Sepolia,
+    // causing "max fee per gas less than block base fee" errors inside SDK calls.
+    // We wrap it with a proxy that injects proper EIP-1559 gas parameters.
+    const boostedProvider = createGasBoostedProvider(window.ethereum);
+    
     // isExperimental flag is needed for Arbitrum Sepolia support
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dataProtector = new IExecDataProtector(window.ethereum as any, {
+    const dataProtector = new IExecDataProtector(boostedProvider as any, {
         isExperimental: true,
     } as any);
 
