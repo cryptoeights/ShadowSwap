@@ -95,12 +95,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
     }, [tx.timestamp]);
     
     return (
-        <a
-            href={getArbiscanTxUrl(tx.hash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block p-3 rounded-lg bg-[var(--bg-tertiary)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-primary)] hover:border-[var(--accent-primary)] transition-all group"
-        >
+        <div className="block p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-primary)] hover:border-[var(--accent-primary)] transition-all group">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     {/* Status Icon */}
@@ -138,14 +133,11 @@ function TransactionRow({ tx }: { tx: Transaction }) {
                     </div>
                 </div>
                 
-                {/* Time & Link */}
-                <div className="flex items-center gap-2 text-right">
-                    <span className="text-xs text-[var(--text-muted)]">{timeAgo}</span>
-                    <ExternalLink className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--accent-primary)] transition-colors" />
-                </div>
+                {/* Time */}
+                <span className="text-xs text-[var(--text-muted)]">{timeAgo}</span>
             </div>
             
-            {/* Transaction Hash & iExec Links */}
+            {/* Transaction Hash & Links */}
             <div className="mt-2 pt-2 border-t border-[var(--border-secondary)]">
                 <div className="flex items-center justify-between">
                     <span className="text-xs font-mono text-[var(--text-muted)]">
@@ -159,22 +151,35 @@ function TransactionRow({ tx }: { tx: Transaction }) {
                         </span>
                     )}
                 </div>
-                {/* iExec Explorer link */}
-                {tx.iExecExplorerUrl && tx.iExecProtectedDataAddress && (
+                
+                {/* Links row */}
+                <div className="flex items-center gap-3 mt-1.5">
+                    {/* Arbiscan link */}
                     <a
-                        href={tx.iExecExplorerUrl}
+                        href={getArbiscanTxUrl(tx.hash)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1.5 flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 hover:underline"
+                        className="flex items-center gap-1 text-xs text-[var(--accent-primary)] hover:underline"
                     >
-                        <Lock className="w-3 h-3" />
-                        iExec Protected Data: {tx.iExecProtectedDataAddress.slice(0, 10)}...{tx.iExecProtectedDataAddress.slice(-6)}
                         <ExternalLink className="w-3 h-3" />
+                        Arbiscan
                     </a>
-                )}
+                    
+                    {/* iExec Explorer link */}
+                    {tx.iExecExplorerUrl && tx.iExecProtectedDataAddress && (
+                        <a
+                            href={tx.iExecExplorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 hover:underline"
+                        >
+                            <Lock className="w-3 h-3" />
+                            iExec Explorer
+                        </a>
+                    )}
+                </div>
             </div>
-        </a>
+        </div>
     );
 }
 
